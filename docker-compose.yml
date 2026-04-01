@@ -13,12 +13,12 @@ services:
       - DEBUG=0
       - ALLOWED_HOSTS=ai.abutolib.uz,127.0.0.1,localhost
       
-      - HTTP_PROXY=socks5://socks5:1080
-      - HTTPS_PROXY=socks5://socks5:1080
+      #- HTTP_PROXY=socks5://socks5:1080
+      #- HTTPS_PROXY=socks5://socks5:1080
     depends_on:
       - socks5
     restart: always
-    
+
   socks5:
     image: monius/docker-warp-socks:latest
     privileged: true
