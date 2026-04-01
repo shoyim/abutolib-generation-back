@@ -14,6 +14,9 @@ os.environ['https_proxy'] = proxy_url
 os.environ['HTTP_PROXY'] = proxy_url
 os.environ['HTTPS_PROXY'] = proxy_url
 
+os.environ['GOOGLE_API_USE_MTLS'] = 'never'
+os.environ['GOOGLE_API_USE_CLIENT_CERTIFICATE'] = 'false'
+
 class QuizService:
     @staticmethod
     def run_ocr(file_path):
