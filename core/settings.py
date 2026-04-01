@@ -24,10 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-+et4-b$+&zl+lr1^@xs!(jxs8k)r6)!!&f&j-fdi4&gwythco3'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = ['ai.abutolib.uz', '127.0.0.1', 'localhost']
 
 # Application definition
 
