@@ -7,6 +7,13 @@ from processing_app.utils import split_text_into_chunks
 from dotenv import load_dotenv
 
 load_dotenv()
+
+proxy_url = "socks5://socks5:9091"
+os.environ['http_proxy'] = proxy_url
+os.environ['https_proxy'] = proxy_url
+os.environ['HTTP_PROXY'] = proxy_url
+os.environ['HTTPS_PROXY'] = proxy_url
+
 class QuizService:
     @staticmethod
     def run_ocr(file_path):
