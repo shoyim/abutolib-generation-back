@@ -1,4 +1,3 @@
-# services.py
 import json
 import os
 import subprocess
@@ -13,7 +12,6 @@ os.environ['http_proxy'] = proxy_url
 os.environ['https_proxy'] = proxy_url
 os.environ['HTTP_PROXY'] = proxy_url
 os.environ['HTTPS_PROXY'] = proxy_url
-
 os.environ['GOOGLE_API_USE_MTLS'] = 'never'
 os.environ['GOOGLE_API_USE_CLIENT_CERTIFICATE'] = 'false'
 
@@ -54,10 +52,10 @@ class QuizService:
         if not api_key:
             raise Exception("GEMINI_API_KEY environment variable topilmadi.")
         
-        genai.configure(api_key=api_key)
+        genai.configure(api_key=api_key, transport='rest')
         
         model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name="gemini-1.5-flash",
             generation_config={"response_mime_type": "application/json"}
         )
         
