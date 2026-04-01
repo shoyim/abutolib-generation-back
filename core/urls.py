@@ -7,6 +7,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/ocr/', include('ocr_app.urls')), 
     path('api/process/', include('processing_app.urls')),
+    path('api/quiz/', include('quiz_generator.urls')),
 ]
 
 if settings.DEBUG:

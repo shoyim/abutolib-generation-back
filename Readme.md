@@ -1,0 +1,1 @@
+text extraction -> chunking -> llm -> structured output -> saving
