@@ -1,9 +1,12 @@
+# services.py
 import json
-import google.generativeai as genai
-import subprocess
 import os
+import subprocess
+import google.generativeai as genai
 from processing_app.utils import split_text_into_chunks
+from dotenv import load_dotenv
 
+load_dotenv()
 class QuizService:
     @staticmethod
     def run_ocr(file_path):
@@ -13,31 +16,34 @@ class QuizService:
         
         try:
             subprocess.run([
-                "ocrmypdf", 
-                "--skip-text",
-                "--language", "uzb+eng", 
-                "--sidecar", sidecar_file, 
-                file_path, 
+                "ocrmypdf",
+                "--force-ocr",
+                "--language", "uzb+eng",
+                "--sidecar", sidecar_file,
+                file_path,
                 output_pdf
-            ], check=True, capture_output=True)
+            ], check=True, capture_output=True, text=True)
             
             if os.path.exists(sidecar_file):
                 with open(sidecar_file, "r", encoding="utf-8") as f:
                     text = f.read()
                 os.remove(sidecar_file)
             else:
-                raise Exception("Sidecar file not generated")
+                raise Exception("OCR natija fayli (sidecar) yaratilmadi.")
                 
             if os.path.exists(output_pdf):
                 os.remove(output_pdf)
                 
             return text
         except subprocess.CalledProcessError as e:
-            raise Exception(f"OCR Error: {e.stderr.decode() if e.stderr else str(e)}")
+            raise Exception(f"ocrmypdf xatosi: {e.stderr}")
 
     @staticmethod
     def call_gemini_llm(chunk_text, config):
-        api_key = "AIzaSyBdqQmkxDCn25qb9uD2Y9gOoD2xzGapRZg"
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise Exception("GEMINI_API_KEY environment variable topilmadi.")
+        
         genai.configure(api_key=api_key)
         
         model = genai.GenerativeModel(
@@ -46,15 +52,19 @@ class QuizService:
         )
         
         prompt = f"""
-        Siz professional test tuzuvchi ekspertsiz.
-        Vazifa: Matn asosida {config['questions_count']} ta test savoli tuzing.
-        Tili: {config['language']}
-        Qiyinchilik: {config['difficulty']}
-
+        Siz professional test tuzuvchisiz. 
+        QUYIDAGI MATN ASOSIDA {config['questions_count']} TA SAVOL TUZING.
+        
+        MATN: {chunk_text}
+        
+        TILI: {config['language']}
+        QIYINCHILIK: {config['difficulty']}
+        
         QOIDALAR:
-        1. Mavzuni matndan avtomatik aniqlang.
-        2. Formulalar uchun KaTeX ($...$) ishlating.
-        3. FAQAT JSON qaytaring:
+        1. Faqat berilgan matn mazmunidan savollar tuzing.
+        2. Mavzuni matndan avtomatik aniqlang.
+        3. Matematik formulalarni $...$ (KaTeX) formatida yozing.
+        4. Javobni faqat ushbu JSON strukturada qaytaring:
         {{
             "detected_main_topic": "...",
             "questions": [
@@ -67,21 +77,19 @@ class QuizService:
                 }}
             ]
         }}
-        Matn: {chunk_text}
         """
+        
         response = model.generate_content(prompt)
         return json.loads(response.text)
 
     @classmethod
     def process_full_pipeline(cls, file_path, config):
         raw_text = cls.run_ocr(file_path)
-
-        print(raw_text)
         
-        if not raw_text.strip():
-            raise Exception("OCR natijasida matn topilmadi")
-
-        chunks = split_text_into_chunks(raw_text, size=2000, overlap=300)
+        if len(raw_text.strip()) < 20:
+            raise Exception("OCR matnni aniqlay olmadi. Iltimos, PDF sifatini tekshiring.")
+        
+        chunks = split_text_into_chunks(raw_text, size=2500, overlap=300)
         
         all_questions = []
         for chunk in chunks[:2]:
