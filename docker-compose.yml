@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    volumes:
+      - .:/app
+      - ./static:/app/static
+      - ./media:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=0
+      - ALLOWED_HOSTS=ai.abutolib.uz,127.0.0.1,localhost
+    restart: always
