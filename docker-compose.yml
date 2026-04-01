@@ -12,14 +12,21 @@ services:
     environment:
       - DEBUG=0
       - ALLOWED_HOSTS=ai.abutolib.uz,127.0.0.1,localhost
-      
       - HTTP_PROXY=socks5://socks5:9091
       - HTTPS_PROXY=socks5://socks5:9091
     depends_on:
       - socks5
+    networks:
+      - abutolib_net
     restart: always
 
   socks5:
     image: monius/docker-warp-socks:latest
     privileged: true
+    networks:
+      - abutolib_net
     restart: always
+
+networks:
+  abutolib_net:
+    driver: bridge
