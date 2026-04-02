@@ -9,10 +9,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-tesseract_path = r"D:\abutolib-generation\ocr_bin\tesseract.exe"
-gs_path = r"D:\abutolib-generation\ocr_bin\gs\bin\gswin64c.exe"
-os.environ['PATH'] += f";{os.path.dirname(tesseract_path)};{os.path.dirname(gs_path)}"
-
 
 class QuizService:
     @staticmethod
