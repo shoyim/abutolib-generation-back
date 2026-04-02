@@ -14,8 +14,9 @@ services:
     environment:
       - DEBUG=0
       - ALLOWED_HOSTS=ai.abutolib.uz,127.0.0.1,localhost
-      - HTTP_PROXY=socks5://socks5:1080
-      - HTTPS_PROXY=socks5://socks5:1080
+      # Gemini uchun proksi (socks5h DNS muammolarini yechadi)
+      - HTTP_PROXY=socks5h://socks5:1080
+      - HTTPS_PROXY=socks5h://socks5:1080
     depends_on:
       - socks5
       - ollama
@@ -33,14 +34,22 @@ services:
     restart: always
 
   ollama:
-    image: ghcr.io/ollama/ollama:latest
+    # Rasmiy va barqaror obrazga o'zgartirildi
+    image: ollama/ollama:latest
     container_name: ollama
     ports:
       - "11434:11434"
-    restart: unless-stopped
+    volumes:
+      # Modellar server o'chsa ham saqlanib qolishi uchun
+      - ollama_storage:/root/.ollama
     networks:
       - abutolib_net
+    restart: unless-stopped
 
 networks:
   abutolib_net:
     driver: bridge
+
+# Yuklangan modellarni saqlash uchun disk maydoni
+volumes:
+  ollama_storage:
