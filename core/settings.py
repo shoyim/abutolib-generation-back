@@ -31,7 +31,10 @@ ALLOWED_HOSTS = ['ai.abutolib.uz', '127.0.0.1', 'localhost']
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Nuxt/Vue porti
     "https://abutolib.uz",    # Production domeni
+    "https://www.abutolib.uz",
 ]
+
+CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 
