@@ -5,6 +5,7 @@ from rest_framework import status
 import os
 import tempfile
 import time
+import sys
 from .services import QuizService
 
 
@@ -71,6 +72,9 @@ class QuizGenerateView(APIView):
                     tmp_file.write(chunk)
                 tmp_path = tmp_file.name
 
+            print(f"PDF fayl saqlandi: {tmp_path}", file=sys.stderr)
+            print(f"OCR boshlanmoqda: {start_page} - {end_page} sahifalar", file=sys.stderr)
+
             ocr_texts = QuizService.ocr_pdf_pages(tmp_path, start_page, end_page)
 
             os.unlink(tmp_path)
@@ -81,9 +85,15 @@ class QuizGenerateView(APIView):
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY
                 )
 
+            print(f"OCR natijasi: {len(ocr_texts)} sahifa topildi", file=sys.stderr)
+
             all_questions = []
             for page_num, page_text in ocr_texts.items():
+                print(f"Sahifa {page_num} ishlanmoqda...", file=sys.stderr)
+                print(f"Matn uzunligi: {len(page_text)} belgi", file=sys.stderr)
+                
                 if not page_text or len(page_text.strip()) < 50:
+                    print(f"Sahifa {page_num} matni juda qisqa, o'tkazib yuborildi", file=sys.stderr)
                     continue
 
                 config = {
@@ -97,8 +107,13 @@ class QuizGenerateView(APIView):
 
                 if questions:
                     all_questions.extend(questions)
+                    print(f"Sahifa {page_num}: {len(questions)} ta savol qo'shildi", file=sys.stderr)
+                else:
+                    print(f"Sahifa {page_num}: hech qanday savol yaratilmadi", file=sys.stderr)
 
                 time.sleep(1)
+
+            print(f"Jami savollar: {len(all_questions)}", file=sys.stderr)
 
             return Response({
                 "status": "success",
@@ -109,6 +124,7 @@ class QuizGenerateView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
+            print(f"Umumiy xatolik: {e}", file=sys.stderr)
             return Response(
                 {"error": f"Xatolik yuz berdi: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
