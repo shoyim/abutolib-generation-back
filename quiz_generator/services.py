@@ -62,13 +62,15 @@ MATN:
 """
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json"
                 )
             )
-            return json.loads(response.text) if response.text else None
+            if response and response.text:
+                return json.loads(response.text)
+            return None
         except Exception:
             return None
 
@@ -78,7 +80,7 @@ MATN:
         if not raw_text.strip():
             return []
         
-        chunks = split_text_into_chunks(raw_text, size=5000, overlap=500)
+        chunks = split_text_into_chunks(raw_text, size=8000, overlap=800)
         all_questions = []
         
         for chunk in chunks:
@@ -87,6 +89,8 @@ MATN:
                 if quiz_data and "questions" in quiz_data:
                     all_questions.extend(quiz_data["questions"])
             except Exception:
+                if all_questions:
+                    return all_questions
                 continue
             
             time.sleep(4) 
