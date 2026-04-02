@@ -17,7 +17,6 @@ WORKDIR /app
 COPY requirements.txt .
 
 RUN pip install --upgrade pip
-RUN pip install --no-cache-dir gunicorn PyMuPDF pdf2image pillow
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
@@ -28,4 +27,4 @@ RUN mkdir -p /app/temp_pages
 ENV PYTHONUNBUFFERED=1
 ENV TESSERACT_CMD=/usr/bin/tesseract
 
-CMD ["gunicorn", "core.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
