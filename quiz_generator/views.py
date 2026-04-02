@@ -1,40 +1,115 @@
+# views.py
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+import os
+import tempfile
+import time
 from .services import QuizService
 
 
 class QuizGenerateView(APIView):
     def post(self, request):
-        pages_data = request.data.get("pages_data")
-        config = request.data.get("config")
+        pdf_file = request.FILES.get("pdf_file")
+        start_page = request.data.get("start_page")
+        end_page = request.data.get("end_page")
+        language = request.data.get("language", "uz")
+        difficulty = request.data.get("difficulty", "o'rta")
+        questions_per_page = request.data.get("questions_per_page", 5)
 
-        if not pages_data or not config:
+        if not pdf_file:
             return Response(
-                {"error": "pages_data va config majburiy"},
+                {"error": "pdf_file majburiy"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if not config.get("questions_count") or not config.get("difficulty"):
+        if not start_page or not end_page:
             return Response(
-                {"error": "config ichida questions_count va difficulty majburiy"},
+                {"error": "start_page va end_page majburiy"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if isinstance(pages_data, dict):
-            raw_text = "\n\n".join(pages_data.values())
-        elif isinstance(pages_data, str):
-            raw_text = pages_data
-        else:
+        try:
+            start_page = int(start_page)
+            end_page = int(end_page)
+            questions_per_page = int(questions_per_page)
+        except ValueError:
             return Response(
-                {"error": "pages_data noto'g'ri formatda"},
+                {"error": "start_page, end_page va questions_per_page integer bo'lishi kerak"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        questions = QuizService.process_full_pipeline(config=config, raw_text=raw_text)
+        if start_page < 1 or end_page < start_page:
+            return Response(
+                {"error": "start_page 1 dan kichik yoki end_page start_page dan kichik bo'lmasligi kerak"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        return Response({
-            "status": "success",
-            "total_questions": len(questions),
-            "data": questions
-        }, status=status.HTTP_200_OK)
+        if questions_per_page < 1 or questions_per_page > 20:
+            return Response(
+                {"error": "questions_per_page 1-20 oralig'ida bo'lishi kerak"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        allowed_languages = ["uz", "en", "ru"]
+        if language not in allowed_languages:
+            return Response(
+                {"error": f"language {allowed_languages} dan biri bo'lishi kerak"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        allowed_difficulties = ["oson", "o'rta", "qiyin"]
+        if difficulty not in allowed_difficulties:
+            return Response(
+                {"error": f"difficulty {allowed_difficulties} dan biri bo'lishi kerak"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                for chunk in pdf_file.chunks():
+                    tmp_file.write(chunk)
+                tmp_path = tmp_file.name
+
+            ocr_texts = QuizService.ocr_pdf_pages(tmp_path, start_page, end_page)
+
+            os.unlink(tmp_path)
+
+            if not ocr_texts:
+                return Response(
+                    {"error": "OCR hech qanday matn topmadi"},
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY
+                )
+
+            all_questions = []
+            for page_num, page_text in ocr_texts.items():
+                if not page_text or len(page_text.strip()) < 50:
+                    continue
+
+                config = {
+                    "questions_count": questions_per_page,
+                    "difficulty": difficulty,
+                    "language": language,
+                    "page_number": page_num
+                }
+
+                questions = QuizService.generate_questions_from_text(page_text, config)
+
+                if questions:
+                    all_questions.extend(questions)
+
+                time.sleep(1)
+
+            return Response({
+                "status": "success",
+                "start_page": start_page,
+                "end_page": end_page,
+                "total_questions": len(all_questions),
+                "data": all_questions
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": f"Xatolik yuz berdi: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

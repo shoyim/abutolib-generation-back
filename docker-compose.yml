@@ -14,9 +14,6 @@ services:
     environment:
       - DEBUG=0
       - ALLOWED_HOSTS=ai.abutolib.uz,127.0.0.1,localhost
-      - HTTP_PROXY=socks5h://socks5:1080
-      - HTTPS_PROXY=socks5h://socks5:1080
-      - NO_PROXY=localhost,127.0.0.1
     depends_on:
       - socks5
     networks:
