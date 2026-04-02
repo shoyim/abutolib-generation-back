@@ -28,6 +28,11 @@ DEBUG = False
 
 ALLOWED_HOSTS = ['ai.abutolib.uz', '127.0.0.1', 'localhost']
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # Nuxt/Vue porti
+    "https://abutolib.uz",    # Production domeni
+]
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -40,10 +45,13 @@ INSTALLED_APPS = [
     'rest_framework',
     'ocr_app',
     'processing_app',
-    'quiz_generator'
+    'quiz_generator',
+    'corsheaders'
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
