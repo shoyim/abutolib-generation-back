@@ -16,18 +16,6 @@ class QuizService:
     DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
     
     @classmethod
-    def _get_proxy_config(cls):
-        http_proxy = os.getenv("HTTP_PROXY")
-        https_proxy = os.getenv("HTTPS_PROXY")
-        
-        if http_proxy and https_proxy:
-            return {
-                "http": http_proxy,
-                "https": https_proxy
-            }
-        return None
-
-    @classmethod
     def ocr_pdf_pages_fast(cls, pdf_path, start_page, end_page):
         page_texts = {}
         
@@ -35,7 +23,6 @@ class QuizService:
             from pdf2image import convert_from_path
             import pytesseract
             from PIL import Image
-            import io
 
             print(f"PDF2Image bilan OCR boshlanmoqda...", file=sys.stderr)
             
@@ -94,25 +81,16 @@ class QuizService:
 
         prompt = f"""Create {config['questions_count']} multiple-choice questions from the text.
 
-Rules:
-- Each question must have 4 options (a, b, c, d)
-- Only one correct answer
-- Questions must be based ONLY on the given text
-- Return ONLY valid JSON
-- It is not necessary to get the question numbers.
+Language: {language_name}
+Difficulty: {difficulty_en}
 
 Output format:
 {{
     "questions": [
         {{
-            "question_text": "question text",
-            "topic": "Question asked topic"
-            "options": {{
-                "a": "option a",
-                "b": "option b",
-                "c": "option c",
-                "d": "option d"
-            }},
+            "question_text": "text",
+            "topic": "topic",
+            "options": {{"a": "opt1", "b": "opt2", "c": "opt3", "d": "opt4"}},
             "correct_answer": "a"
         }}
     ]
@@ -139,14 +117,15 @@ Text:
         }
 
         try:
-            proxies = cls._get_proxy_config()
+            # PROXY BUTUNLAY OLIB TASHLANDI
             response = requests.post(
                 cls.DEEPSEEK_API_URL, 
                 headers=headers, 
                 json=payload, 
-                timeout=45,
-                proxies=proxies
+                timeout=120  # timeout oshirildi: 45 -> 120
             )
+
+            print(f"Test yaratish API javobi: {response.status_code}", file=sys.stderr)
 
             if response.status_code == 200:
                 result = response.json()
@@ -171,8 +150,12 @@ Text:
 
             else:
                 print(f"API xatosi: {response.status_code}", file=sys.stderr)
+                print(f"Xato: {response.text[:500]}", file=sys.stderr)
                 return []
 
+        except requests.exceptions.Timeout:
+            print(f"API vaqt tugashi xatosi: so'rov 120 soniyadan oshdi", file=sys.stderr)
+            return []
         except Exception as e:
             print(f"Test yaratish xatosi: {e}", file=sys.stderr)
             return []
