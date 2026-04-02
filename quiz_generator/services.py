@@ -1,18 +1,19 @@
-# services.py - to'liq qayta ishlangan versiya
+# services.py - image_url xatosini tuzatish
 import os
 import json
 import tempfile
 import base64
 import requests
 import time
-import subprocess
 import sys
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class QuizService:
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
     DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-
+    
     @classmethod
     def _get_proxy_config(cls):
         http_proxy = os.getenv("HTTP_PROXY")
@@ -30,70 +31,36 @@ class QuizService:
         page_texts = {}
         
         try:
-            import fitz
-            doc = fitz.open(pdf_path)
-            total_pages = len(doc)
-
-            if end_page > total_pages:
-                end_page = total_pages
-
-            for page_num in range(start_page - 1, end_page):
-                page = doc[page_num]
-                
-                matn = page.get_text()
-                
-                if not matn or len(matn.strip()) < 100:
-                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                    img_data = pix.tobytes("png")
-                    img_base64 = base64.b64encode(img_data).decode('utf-8')
-                    
-                    deepseek_text = cls.call_deepseek_ocr(img_base64)
-                    if deepseek_text:
-                        matn = deepseek_text
-                    else:
-                        matn = ""
-                
-                page_texts[page_num + 1] = matn
-                print(f"Sahifa {page_num + 1}: {len(matn)} belgi topildi", file=sys.stderr)
-
-            doc.close()
-            return page_texts
-
-        except Exception as e:
-            print(f"PyMuPDF xatosi: {e}", file=sys.stderr)
-            return cls.ocr_with_pdf2image(pdf_path, start_page, end_page)
-
-    @classmethod
-    def ocr_with_pdf2image(cls, pdf_path, start_page, end_page):
-        page_texts = {}
-        
-        try:
             from pdf2image import convert_from_path
             import pytesseract
             from PIL import Image
             import io
 
-            images = convert_from_path(pdf_path, first_page=start_page, last_page=end_page, dpi=300)
-
-            for idx, image in enumerate(images):
-                page_num = start_page + idx
+            print(f"PDF2Image bilan OCR boshlanmoqda...", file=sys.stderr)
+            
+            images = convert_from_path(pdf_path, dpi=200)
+            total_images = len(images)
+            print(f"Jami {total_images} ta rasmga aylantirildi", file=sys.stderr)
+            
+            if end_page > total_images:
+                end_page = total_images
+            
+            for idx in range(start_page - 1, end_page):
+                page_num = idx + 1
+                image = images[idx]
                 
-                text = pytesseract.image_to_string(image, lang='uzb+eng')
+                print(f"Sahifa {page_num} ishlanmoqda...", file=sys.stderr)
                 
-                if not text or len(text.strip()) < 100:
-                    buffered = io.BytesIO()
-                    image.save(buffered, format="PNG")
-                    img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-                    
-                    deepseek_text = cls.call_deepseek_ocr(img_base64)
-                    if deepseek_text:
-                        text = deepseek_text
-                    else:
-                        text = ""
+                tesseract_text = pytesseract.image_to_string(image, lang='uzb+eng')
+                if tesseract_text:
+                    page_texts[page_num] = tesseract_text
+                    print(f"Sahifa {page_num} Tesseract: {len(tesseract_text)} belgi", file=sys.stderr)
+                else:
+                    page_texts[page_num] = ""
+                    print(f"Sahifa {page_num}: matn topilmadi", file=sys.stderr)
                 
-                page_texts[page_num] = text
-                print(f"Sahifa {page_num}: {len(text)} belgi topildi", file=sys.stderr)
-
+                time.sleep(0.5)
+            
             return page_texts
 
         except Exception as e:
@@ -101,71 +68,12 @@ class QuizService:
             return {}
 
     @classmethod
-    def call_deepseek_ocr(cls, image_base64):
-        if not cls.DEEPSEEK_API_KEY:
-            print("DeepSeek API kaliti topilmadi", file=sys.stderr)
-            return ""
-
-        headers = {
-            "Authorization": f"Bearer {cls.DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Extract all text from this image. Return only the extracted text. No explanations. Keep the original language."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{image_base64}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 4000,
-            "temperature": 0.1
-        }
-
-        try:
-            proxies = cls._get_proxy_config()
-            response = requests.post(
-                cls.DEEPSEEK_API_URL, 
-                headers=headers, 
-                json=payload, 
-                timeout=60,
-                proxies=proxies
-            )
-            
-            print(f"DeepSeek API javobi: {response.status_code}", file=sys.stderr)
-            
-            if response.status_code == 200:
-                result = response.json()
-                text = result["choices"][0]["message"]["content"]
-                print(f"OCR natijasi: {len(text)} belgi", file=sys.stderr)
-                return text
-            else:
-                print(f"API xatosi: {response.text}", file=sys.stderr)
-                return ""
-                
-        except Exception as e:
-            print(f"DeepSeek OCR xatosi: {e}", file=sys.stderr)
-            return ""
-
-    @classmethod
     def generate_questions_from_text(cls, page_text, config):
         if not cls.DEEPSEEK_API_KEY:
             print("DeepSeek API kaliti topilmadi", file=sys.stderr)
             return []
 
-        if not page_text or len(page_text.strip()) < 100:
+        if not page_text or len(page_text.strip()) < 50:
             print(f"Matn juda qisqa: {len(page_text)} belgi", file=sys.stderr)
             return []
 
@@ -188,18 +96,19 @@ class QuizService:
 Language: {language_name}
 Difficulty: {difficulty_en}
 
-Important rules:
+Rules:
 - Each question must have 4 options (a, b, c, d)
 - Only one correct answer
 - Questions must be based ONLY on the given text
-- Do not add any explanations
-- Return ONLY valid JSON, no other text
+- Return ONLY valid JSON
+- It is not necessary to get the question numbers.
 
 Output format:
 {{
     "questions": [
         {{
             "question_text": "question text",
+            "topic": "Question asked topic"
             "options": {{
                 "a": "option a",
                 "b": "option b",
@@ -210,6 +119,7 @@ Output format:
         }}
     ]
 }}
+
 
 Text:
 {page_text[:6000]}
@@ -246,8 +156,6 @@ Text:
             if response.status_code == 200:
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
-                
-                print(f"Raw response: {content[:200]}", file=sys.stderr)
 
                 if content.startswith("```json"):
                     content = content[7:]
@@ -259,19 +167,18 @@ Text:
                 data = json.loads(content)
                 questions = data.get("questions", [])
                 
-                print(f"{len(questions)} ta savol yaratildi", file=sys.stderr)
-
                 for q in questions:
                     q["page"] = config.get("page_number")
                     q["difficulty"] = config.get("difficulty")
 
+                print(f"{len(questions)} ta savol yaratildi", file=sys.stderr)
                 return questions
 
-            return []
+            else:
+                print(f"API xatosi: {response.status_code}", file=sys.stderr)
+                print(f"Xato: {response.text[:500]}", file=sys.stderr)
+                return []
 
-        except json.JSONDecodeError as e:
-            print(f"JSON decode xatosi: {e}", file=sys.stderr)
-            return []
         except Exception as e:
             print(f"Test yaratish xatosi: {e}", file=sys.stderr)
             return []
