@@ -1,7 +1,7 @@
 import json
 import os
 import subprocess
-import google.generativeai as genai
+import requests
 from processing_app.utils import split_text_into_chunks
 from dotenv import load_dotenv
 
@@ -12,8 +12,8 @@ os.environ['http_proxy'] = proxy_url
 os.environ['https_proxy'] = proxy_url
 os.environ['HTTP_PROXY'] = proxy_url
 os.environ['HTTPS_PROXY'] = proxy_url
-os.environ['GOOGLE_API_USE_MTLS'] = 'never'
-os.environ['GOOGLE_API_USE_CLIENT_CERTIFICATE'] = 'false'
+
+OLLAMA_API_URL = "http://127.0.0.1:11434/api/generate"
 
 class QuizService:
     @staticmethod
@@ -21,7 +21,6 @@ class QuizService:
         output_base = file_path.rsplit('.', 1)[0]
         sidecar_file = output_base + ".txt"
         output_pdf = output_base + "_ocr.pdf"
-        
         try:
             subprocess.run([
                 "ocrmypdf",
@@ -37,72 +36,67 @@ class QuizService:
                     text = f.read()
                 os.remove(sidecar_file)
             else:
-                raise Exception("OCR natija fayli (sidecar) yaratilmadi.")
+                raise Exception("OCR natija fayli yaratilmadi.")
                 
             if os.path.exists(output_pdf):
                 os.remove(output_pdf)
                 
             return text
         except subprocess.CalledProcessError as e:
-            raise Exception(f"ocrmypdf xatosi: {e.stderr}")
+            raise Exception(f"OCR xatosi: {e.stderr}")
 
     @staticmethod
-    def call_gemini_llm(chunk_text, config):
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise Exception("GEMINI_API_KEY environment variable topilmadi.")
-        
-        genai.configure(api_key=api_key, transport='rest')
-        
-        model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            generation_config={"response_mime_type": "application/json"}
-        )
-        
+    def call_ollama_llm(chunk_text, config):
         prompt = f"""
-        Siz professional test tuzuvchisiz. 
-        QUYIDAGI MATN ASOSIDA {config['questions_count']} TA SAVOL TUZING.
-        
-        MATN: {chunk_text}
-        
-        TILI: {config['language']}
-        QIYINCHILIK: {config['difficulty']}
-        
-        QOIDALAR:
-        1. Faqat berilgan matn mazmunidan savollar tuzing.
-        2. Mavzuni matndan avtomatik aniqlang.
-        3. Matematik formulalarni $...$ (KaTeX) formatida yozing.
-        4. Javobni faqat ushbu JSON strukturada qaytaring:
+Siz professional test tuzuvchisiz.
+{config['questions_count']} ta savol tuzing faqat o'zbek tilida.
+
+MATN:
+{chunk_text}
+
+QOIDALAR:
+1. Faqat berilgan matn mazmunidan savollar tuzing.
+2. Mavzuni matndan aniqlang.
+3. Matematik formulalarni $...$ formatida yozing.
+4. Javobni faqat JSON formatda qaytaring:
+{{
+    "detected_main_topic": "...",
+    "questions": [
         {{
-            "detected_main_topic": "...",
-            "questions": [
-                {{
-                    "topic": "...",
-                    "difficulty": "...",
-                    "question_text": "...",
-                    "options": {{"a": "..", "b": "..", "c": "..", "d": ".."}},
-                    "correct_answer": "a"
-                }}
-            ]
+            "topic": "...",
+            "difficulty": "{config['difficulty']}",
+            "question_text": "...",
+            "options": {{"a": "..", "b": "..", "c": "..", "d": ".."}},
+            "correct_answer": "a"
         }}
-        """
-        
-        response = model.generate_content(prompt)
-        return json.loads(response.text)
+    ]
+}}
+"""
+        data = {
+            "model": "phi",
+            "prompt": prompt,
+            "stream": False
+        }
+        res = requests.post(OLLAMA_API_URL, json=data, timeout=120)
+        res_json = res.json()
+        content = res_json.get("response", "").strip()
+        if not content:
+            raise Exception(f"Ollama bo‘sh javob berdi:\n{res_json}")
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            raise Exception(f"JSON parsing xatosi:\n{content}")
 
     @classmethod
     def process_full_pipeline(cls, file_path, config):
         raw_text = cls.run_ocr(file_path)
-        
         if len(raw_text.strip()) < 20:
-            raise Exception("OCR matnni aniqlay olmadi. Iltimos, PDF sifatini tekshiring.")
+            raise Exception("OCR matn aniqlanmadi.")
         
-        chunks = split_text_into_chunks(raw_text, size=2500, overlap=300)
-        
+        chunks = split_text_into_chunks(raw_text, size=1500, overlap=300)
         all_questions = []
-        for chunk in chunks[:2]:
-            quiz_data = cls.call_gemini_llm(chunk, config)
+        for chunk in chunks:
+            quiz_data = cls.call_ollama_llm(chunk, config)
             if "questions" in quiz_data:
-                all_questions.extend(quiz_data['questions'])
-        
+                all_questions.extend(quiz_data["questions"])
         return all_questions
