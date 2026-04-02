@@ -14,17 +14,7 @@ services:
     environment:
       - DEBUG=0
       - ALLOWED_HOSTS=ai.abutolib.uz,127.0.0.1,localhost
-    depends_on:
-      - socks5
-    networks:
-      - abutolib_net
-    restart: always
-
-  socks5:
-    image: monius/docker-warp-socks:latest
-    privileged: true
-    environment:
-      - PORT=1080
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,https://localhost:3000,https://ai.abutolib.uz,https://abutolib.uz
     networks:
       - abutolib_net
     restart: always

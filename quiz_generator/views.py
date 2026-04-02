@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 import os
 import tempfile
 import sys
+import concurrent.futures
 from .services import QuizService
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -74,7 +75,7 @@ class QuizGenerateView(APIView):
                     tmp_file.write(chunk)
                 tmp_path = tmp_file.name
             
-            ocr_texts = QuizService.ocr_pdf_pages(tmp_path, start_page, end_page)
+            ocr_texts = QuizService.ocr_pdf_pages_fast(tmp_path, start_page, end_page)
             os.unlink(tmp_path)
             
             if not ocr_texts:
@@ -84,31 +85,38 @@ class QuizGenerateView(APIView):
                 )
             
             all_questions = []
-            pages_with_content = len([text for text in ocr_texts.values() if text and len(text.strip()) >= 50])
+            pages_with_content = [text for text in ocr_texts.values() if text and len(text.strip()) >= 50]
             
-            if pages_with_content == 0:
+            if len(pages_with_content) == 0:
                 return Response(
                     {"error": "Hech bir sahifada yetarlicha matn topilmadi"},
                     status=status.HTTP_422_UNPROCESSABLE_ENTITY
                 )
             
-            questions_per_page = max(1, questions_count // pages_with_content)
+            questions_per_page = max(1, questions_count // len(pages_with_content))
+            remaining_questions = questions_count
             
             for page_num, page_text in ocr_texts.items():
                 if not page_text or len(page_text.strip()) < 50:
                     continue
                 
+                if remaining_questions <= 0:
+                    break
+                
+                current_count = min(questions_per_page, remaining_questions)
+                
                 config = {
-                    "questions_count": questions_per_page,
+                    "questions_count": current_count,
                     "difficulty": difficulty,
                     "language": language,
                     "page_number": page_num
                 }
                 
-                questions = QuizService.generate_questions_from_text(page_text, config)
+                questions = QuizService.generate_questions_from_text_fast(page_text, config)
                 
                 if questions:
                     all_questions.extend(questions)
+                    remaining_questions -= len(questions)
             
             if len(all_questions) > questions_count:
                 all_questions = all_questions[:questions_count]
@@ -122,6 +130,7 @@ class QuizGenerateView(APIView):
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
+            print(f"Xatolik: {e}", file=sys.stderr)
             return Response(
                 {"error": f"Xatolik yuz berdi: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

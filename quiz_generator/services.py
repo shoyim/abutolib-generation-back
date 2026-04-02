@@ -1,4 +1,4 @@
-# services.py - image_url xatosini tuzatish
+# services.py
 import os
 import json
 import tempfile
@@ -6,6 +6,7 @@ import base64
 import requests
 import time
 import sys
+import concurrent.futures
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,7 +28,7 @@ class QuizService:
         return None
 
     @classmethod
-    def ocr_pdf_pages(cls, pdf_path, start_page, end_page):
+    def ocr_pdf_pages_fast(cls, pdf_path, start_page, end_page):
         page_texts = {}
         
         try:
@@ -38,28 +39,28 @@ class QuizService:
 
             print(f"PDF2Image bilan OCR boshlanmoqda...", file=sys.stderr)
             
-            images = convert_from_path(pdf_path, dpi=200)
-            total_images = len(images)
-            print(f"Jami {total_images} ta rasmga aylantirildi", file=sys.stderr)
+            images = convert_from_path(pdf_path, dpi=150, first_page=start_page, last_page=end_page)
+            print(f"Jami {len(images)} ta rasmga aylantirildi (sahifalar: {start_page}-{end_page})", file=sys.stderr)
             
-            if end_page > total_images:
-                end_page = total_images
+            def process_page(idx, image):
+                page_num = start_page + idx
+                try:
+                    tesseract_text = pytesseract.image_to_string(image, lang='uzb+eng', config='--psm 6')
+                    return page_num, tesseract_text if tesseract_text else ""
+                except Exception as e:
+                    print(f"Sahifa {page_num} xatosi: {e}", file=sys.stderr)
+                    return page_num, ""
             
-            for idx in range(start_page - 1, end_page):
-                page_num = idx + 1
-                image = images[idx]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {executor.submit(process_page, idx, img): idx for idx, img in enumerate(images)}
                 
-                print(f"Sahifa {page_num} ishlanmoqda...", file=sys.stderr)
-                
-                tesseract_text = pytesseract.image_to_string(image, lang='uzb+eng')
-                if tesseract_text:
-                    page_texts[page_num] = tesseract_text
-                    print(f"Sahifa {page_num} Tesseract: {len(tesseract_text)} belgi", file=sys.stderr)
-                else:
-                    page_texts[page_num] = ""
-                    print(f"Sahifa {page_num}: matn topilmadi", file=sys.stderr)
-                
-                time.sleep(0.5)
+                for future in concurrent.futures.as_completed(futures):
+                    page_num, text = future.result()
+                    page_texts[page_num] = text
+                    if text:
+                        print(f"Sahifa {page_num}: {len(text)} belgi", file=sys.stderr)
+                    else:
+                        print(f"Sahifa {page_num}: matn topilmadi", file=sys.stderr)
             
             return page_texts
 
@@ -68,7 +69,7 @@ class QuizService:
             return {}
 
     @classmethod
-    def generate_questions_from_text(cls, page_text, config):
+    def generate_questions_from_text_fast(cls, page_text, config):
         if not cls.DEEPSEEK_API_KEY:
             print("DeepSeek API kaliti topilmadi", file=sys.stderr)
             return []
@@ -91,10 +92,7 @@ class QuizService:
         }
         difficulty_en = difficulty_map.get(config.get("difficulty", "o'rta"), "medium")
 
-        prompt = f"""Create {config['questions_count']} multiple-choice questions from the text below.
-
-Language: {language_name}
-Difficulty: {difficulty_en}
+        prompt = f"""Create {config['questions_count']} multiple-choice questions from the text.
 
 Rules:
 - Each question must have 4 options (a, b, c, d)
@@ -120,9 +118,8 @@ Output format:
     ]
 }}
 
-
 Text:
-{page_text[:6000]}
+{page_text[:4000]}
 """
 
         headers = {
@@ -133,11 +130,11 @@ Text:
         payload = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "You are a quiz creator. Return only valid JSON."},
+                {"role": "system", "content": "Return only valid JSON."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.3,
-            "max_tokens": 4000,
+            "max_tokens": 3000,
             "response_format": {"type": "json_object"}
         }
 
@@ -147,11 +144,9 @@ Text:
                 cls.DEEPSEEK_API_URL, 
                 headers=headers, 
                 json=payload, 
-                timeout=60,
+                timeout=45,
                 proxies=proxies
             )
-
-            print(f"Test yaratish API javobi: {response.status_code}", file=sys.stderr)
 
             if response.status_code == 200:
                 result = response.json()
@@ -176,7 +171,6 @@ Text:
 
             else:
                 print(f"API xatosi: {response.status_code}", file=sys.stderr)
-                print(f"Xato: {response.text[:500]}", file=sys.stderr)
                 return []
 
         except Exception as e:
