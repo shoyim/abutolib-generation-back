@@ -12,8 +12,9 @@ services:
     environment:
       - DEBUG=0
       - ALLOWED_HOSTS=ai.abutolib.uz,127.0.0.1,localhost
-      - HTTP_PROXY=socks5://socks5:9091
-      - HTTPS_PROXY=socks5://socks5:9091
+      # DIQQAT: Portni 1080 ga o'zgartirdik (standart Warp porti)
+      - HTTP_PROXY=socks5://socks5:1080
+      - HTTPS_PROXY=socks5://socks5:1080
     depends_on:
       - socks5
     networks:
@@ -23,6 +24,9 @@ services:
   socks5:
     image: monius/docker-warp-socks:latest
     privileged: true
+    # Ba'zi versiyalarda portni aniq ko'rsatish foyda beradi
+    environment:
+      - PORT=1080 
     networks:
       - abutolib_net
     restart: always
