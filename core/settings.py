@@ -27,6 +27,10 @@ SECRET_KEY = 'django-insecure-+et4-b$+&zl+lr1^@xs!(jxs8k)r6)!!&f&j-fdi4&gwythco3
 DEBUG = False
 
 ALLOWED_HOSTS = ['ai.abutolib.uz', '127.0.0.1', 'localhost']
+DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600
+
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Nuxt/Vue porti
