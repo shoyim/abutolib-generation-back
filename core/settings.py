@@ -18,7 +18,6 @@ CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://localhost:3000",
     "https://ai.abutolib.uz",
     "https://abutolib.uz",
 ]
@@ -27,7 +26,6 @@ CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
-    "https://localhost:3000",
     "https://ai.abutolib.uz",
     "https://abutolib.uz",
 ]
